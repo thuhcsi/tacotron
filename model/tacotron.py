@@ -2,7 +2,6 @@
 """ with reference to https://github.com/CorentinJ/Real-Time-Voice-Cloning/tree/b5ba6d0371882dbab595c48deb2ff17896547de7/synthesizer """
 
 import torch
-from torch.autograd import Variable
 from torch import nn
 
 from .attention import BahdanauAttention, AttentionWrapper
@@ -32,13 +31,15 @@ class Decoder(nn.Module):
     def __init__(self, mel_dim, r, encoder_output_dim,
                  prenet_dims=[256, 128], prenet_dropout=0.5,
                  attention_context_dim=256, attention_rnn_units=256,
-                 decoder_rnn_units=256, decoder_rnn_layers=2):
+                 decoder_rnn_units=256, decoder_rnn_layers=2,
+                 max_decoder_steps=1000, stop_threshold=0.5):
         super(Decoder, self).__init__()
         self.mel_dim = mel_dim
         self.r = r
         self.attention_rnn_units = attention_rnn_units
         self.decoder_rnn_units = decoder_rnn_units
-        self.max_decoder_steps = 200
+        self.max_decoder_steps = max_decoder_steps // r
+        self.stop_threshold = stop_threshold
 
         # Prenet
         self.prenet = Prenet(mel_dim * r, prenet_dims, prenet_dropout)
@@ -120,7 +121,7 @@ class Decoder(nn.Module):
         current_input = initial_input
         while True:
             if t > 0:
-                current_input = outputs[-1] if greedy else inputs[t - 1]
+                current_input = mel_outputs[-1] if greedy else inputs[t - 1]
             t += 1
 
             # Prenet
@@ -156,10 +157,13 @@ class Decoder(nn.Module):
             stop_tokens += [stop] * self.r
 
             if greedy:
-                if t > 1 and is_end_of_frames(output):
+                if stop > self.stop_threshold:
+                    break
+                elif t > 1 and is_end_of_frames(output):
+                    print("Warning: End with low power.")
                     break
                 elif t > self.max_decoder_steps:
-                    print("Warning! doesn't seems to be converged")
+                    print("Warning: Reached max decoder steps.")
                     break
             else:
                 if t >= T_decoder:
@@ -182,7 +186,7 @@ def is_end_of_frames(output, eps=-3.4):
 
 class Tacotron(nn.Module):
     def __init__(self, model_cfg, n_vocab, embed_dim=256, mel_dim=80, linear_dim=1025,
-                 r=5, use_memory_mask=False):
+                 max_decoder_steps=1000, stop_threshold=0.5, r=5, use_memory_mask=False):
         super(Tacotron, self).__init__()
 
         self.mel_dim = mel_dim
@@ -201,7 +205,8 @@ class Tacotron(nn.Module):
 
         # Decoder
         decoder_cfg = model_cfg["decoder"]
-        self.decoder = Decoder(mel_dim, r, encoder_out_dim, **decoder_cfg)
+        self.decoder = Decoder(mel_dim, r, encoder_out_dim, **decoder_cfg,
+            max_decoder_steps=max_decoder_steps, stop_threshold=stop_threshold)
 
         # Postnet
         postnet_cfg = model_cfg["postnet"]

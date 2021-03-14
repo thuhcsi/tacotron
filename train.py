@@ -30,6 +30,8 @@ def create_model(hparams):
                      embed_dim=hparams.symbols_embedding_dim,
                      mel_dim=hparams.n_mel_channels,
                      linear_dim=hparams.n_mel_channels,
+                     max_decoder_steps=hparams.max_decoder_steps,
+                     stop_threshold=hparams.gate_threshold,
                      r=hparams.n_frames_per_step,
                      use_memory_mask=True,
                      model_cfg=model_cfg,

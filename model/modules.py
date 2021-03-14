@@ -2,7 +2,6 @@
 """ with reference to https://github.com/CorentinJ/Real-Time-Voice-Cloning/tree/b5ba6d0371882dbab595c48deb2ff17896547de7/synthesizer """
 
 import torch
-from torch.autograd import Variable
 from torch import nn
 
 class Prenet(nn.Module):
