@@ -33,6 +33,8 @@ class Hparams:
         ################################
         # Model Parameters             #
         ################################
+        self.tacotron_config = "tacotron1.json"
+
         self.n_symbols = len(symbols(self.symbols_lang))
         self.symbols_embedding_dim = 512
 

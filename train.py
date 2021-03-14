@@ -1,6 +1,7 @@
 import os
 import time
 import argparse
+import json
 
 import torch
 from torch.utils.data import DataLoader
@@ -23,13 +24,15 @@ def prepare_datasets(hparams):
 
 def create_model(hparams):
     # Tacotron model
+    with open(hparams.tacotron_config, 'r') as f:
+        model_cfg = json.load(f)
     model = Tacotron(n_vocab=hparams.n_symbols,
-                     embedding_dim=hparams.symbols_embedding_dim,
+                     embed_dim=hparams.symbols_embedding_dim,
                      mel_dim=hparams.n_mel_channels,
                      linear_dim=hparams.n_mel_channels,
                      r=hparams.n_frames_per_step,
-                     padding_idx=None,
-                     use_memory_mask=False,
+                     use_memory_mask=True,
+                     model_cfg=model_cfg,
                      )
     # Loss criterion
     criterion = TacotronLoss()

@@ -1,0 +1,34 @@
+{
+    "encoder":{
+        "prenet_dims": [256, 128],
+        "prenet_dropout": 0.5,
+        "K": 16,
+        "conv_channels": 128,
+        "pool_kernel_size": 2,
+        "proj_channels": [128, 128],
+        "proj_kernel_size": 3,
+        "num_highways": 4,
+        "highway_units": 128,
+        "rnn_units": 128
+    },
+
+    "decoder":{
+        "prenet_dims": [256, 128],
+        "prenet_dropout": 0.5,
+        "attention_rnn_units": 256,
+        "attention_context_dim": 256,
+        "decoder_rnn_units": 256,
+        "decoder_rnn_layers": 2
+    },
+
+    "postnet":{
+        "K": 8,
+        "conv_channels": 128,
+        "pool_kernel_size": 2,
+        "proj_channels": [256, 80],
+        "proj_kernel_size": 3,
+        "num_highways": 4,
+        "highway_units": 128,
+        "rnn_units": 128
+    }
+}
