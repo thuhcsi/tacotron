@@ -1,7 +1,7 @@
+""" adapted from https://github.com/r9y9/tacotron_pytorch """
+
 import torch
-from torch.autograd import Variable
 from torch import nn
-from torch.nn import functional as F
 
 
 class BahdanauAttention(nn.Module):
@@ -40,7 +40,7 @@ def get_mask_from_lengths(memory, memory_lengths):
     mask = memory.data.new(memory.size(0), memory.size(1)).byte().zero_()
     for idx, l in enumerate(memory_lengths):
         mask[idx][:l] = 1
-    return ~mask
+    return mask == 0
 
 
 class AttentionWrapper(nn.Module):
@@ -73,7 +73,7 @@ class AttentionWrapper(nn.Module):
             alignment.data.masked_fill_(mask, self.score_mask_value)
 
         # Normalize attention weight
-        alignment = F.softmax(alignment)
+        alignment = nn.Softmax(dim=1)(alignment)
 
         # Attention context vector
         # (batch, 1, dim)
