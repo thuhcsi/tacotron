@@ -61,7 +61,10 @@ class Decoder(nn.Module):
             [nn.GRUCell(decoder_rnn_units, decoder_rnn_units) for _ in range(decoder_rnn_layers)])
 
         # Project to mel
-        self.proj_to_mel = nn.Linear(decoder_rnn_units, mel_dim * r)
+        self.mel_proj = nn.Linear(decoder_rnn_units, mel_dim * r)
+
+        # Stop token prediction
+        self.stop_proj = nn.Linear(decoder_rnn_units, 1)
 
     def forward(self, encoder_outputs, inputs=None, memory_lengths=None):
         """
@@ -110,7 +113,7 @@ class Decoder(nn.Module):
         if inputs is not None:
             inputs = inputs.transpose(0, 1)
 
-        mel_outputs, attn_scores = [], []
+        mel_outputs, attn_scores, stop_tokens = [], [], []
 
         # Run the decoder loop
         t = 0
@@ -138,14 +141,19 @@ class Decoder(nn.Module):
                     decoder_input, decoder_rnn_hiddens[idx])
                 # Residual connectinon
                 decoder_input = decoder_rnn_hiddens[idx] + decoder_input
+            decoder_output = decoder_input
 
             # Project to mel
-            output = decoder_input
-            output = self.proj_to_mel(output)
+            output = self.mel_proj(decoder_output)
+
+            # Stop token prediction
+            stop = self.stop_proj(decoder_output)
+            stop = torch.sigmoid(stop)
 
             # Store predictions
             mel_outputs += [output]
             attn_scores += [attention_score]
+            stop_tokens += [stop] * self.r
 
             if greedy:
                 if t > 1 and is_end_of_frames(output):
@@ -163,8 +171,9 @@ class Decoder(nn.Module):
         # Back to batch first
         attn_scores = torch.stack(attn_scores).transpose(0, 1)
         mel_outputs = torch.stack(mel_outputs).transpose(0, 1).contiguous()
+        stop_tokens = torch.stack(stop_tokens).transpose(0, 1).squeeze(2)
 
-        return mel_outputs, attn_scores
+        return mel_outputs, attn_scores, stop_tokens
 
 
 def is_end_of_frames(output, eps=-3.4):
@@ -216,7 +225,7 @@ class Tacotron(nn.Module):
             memory_lengths = None
 
         # (B, T', mel_dim*r)
-        mel_outputs, alignments = self.decoder(
+        mel_outputs, alignments, stop_tokens = self.decoder(
             encoder_outputs, targets, memory_lengths=memory_lengths)
 
         # Post net processing below
@@ -228,7 +237,7 @@ class Tacotron(nn.Module):
         linear_outputs = self.postnet(mel_outputs)
         linear_outputs = self.last_linear(linear_outputs)
 
-        return mel_outputs, linear_outputs, alignments
+        return mel_outputs, linear_outputs, stop_tokens, alignments
 
 
 class TacotronLoss(nn.Module):
@@ -236,13 +245,15 @@ class TacotronLoss(nn.Module):
         super(TacotronLoss, self).__init__()
 
     def forward(self, predicts, targets):
-        mel_target, linear_target = targets
+        mel_target, linear_target, stop_target = targets
         mel_target.requires_grad = False
         linear_target.requires_grad = False
+        stop_target.requires_grad = False
 
-        mel_predict, linear_predict, _ = predicts
+        mel_predict, linear_predict, stop_predict, _ = predicts
 
         mel_loss = nn.MSELoss()(mel_predict, mel_target)
         linear_loss = nn.MSELoss()(linear_predict, linear_target)
+        stop_loss = nn.BCELoss()(stop_predict, stop_target)
 
-        return mel_loss + linear_loss, mel_loss, linear_loss
+        return mel_loss + linear_loss + stop_loss

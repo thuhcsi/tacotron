@@ -18,8 +18,8 @@ class TacotronLogger(SummaryWriter):
     def log_validation(self, loss, model, targets, predicts, iteration):
         self.add_scalar("validation.loss", loss, iteration)
 
-        _, spec_predicts, alignments = predicts
-        _, spec_targets  = targets
+        _, spec_predicts, stop_predicts, alignments = predicts
+        _, spec_targets, stop_targets  = targets
         spec_targets = spec_targets.transpose(1, 2)
         spec_predicts = spec_predicts.transpose(1, 2)
 
@@ -28,7 +28,7 @@ class TacotronLogger(SummaryWriter):
             tag = tag.replace('.', '/')
             self.add_histogram(tag, value.data.cpu().numpy(), iteration)
 
-        # plot alignment, mel target and predicted
+        # plot alignment, mel target and predicted, stop_token target and predicted
         idx = random.randint(0, alignments.size(0) - 1)
         self.add_image(
             "alignment",
@@ -41,6 +41,12 @@ class TacotronLogger(SummaryWriter):
         self.add_image(
             "spec_predicted",
             plot_spectrogram_to_numpy(spec_predicts[idx].data.cpu().numpy()),
+            iteration, dataformats='HWC')
+        self.add_image(
+            "stop_token",
+            plot_gate_outputs_to_numpy(
+                stop_targets[idx].data.cpu().numpy(),
+                torch.sigmoid(stop_predicts[idx]).data.cpu().numpy()),
             iteration, dataformats='HWC')
 
 

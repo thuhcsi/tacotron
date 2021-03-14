@@ -89,13 +89,13 @@ def validate(model, criterion, iteration, device, valset, batch_size, collate_fn
 
         val_loss = 0.0
         for i, batch in enumerate(valdata_loader):
-            text, mel_target, text_length = parse_batch(batch, device)
-            mel_predict, spec_predict, attention = model(text, mel_target, text_length)
+            text, mel_target, text_length, stop_target = parse_batch(batch, device)
+            mel_predict, spec_predict, stop_predict, attention = model(text, mel_target, text_length)
 
             # Loss
-            predicts = (mel_predict, spec_predict, attention)
-            targets  = (mel_target, mel_target)
-            loss, mel_loss, spec_loss = criterion(predicts, targets)
+            predicts = (mel_predict, spec_predict, stop_predict, attention)
+            targets  = (mel_target, mel_target, stop_target)
+            loss = criterion(predicts, targets)
 
             val_loss += loss.item()
         val_loss = val_loss / (i + 1)
@@ -113,7 +113,7 @@ def parse_batch(batch, device):
     gate = gate.to(device).float()
     mel_length = mel_length.to(device).long()
 
-    return (text, mel, text_length)
+    return (text, mel, text_length, gate)
 
 
 def train(output_dir, log_dir, checkpoint_path, warm_start, hparams):
@@ -185,19 +185,19 @@ def train(output_dir, log_dir, checkpoint_path, warm_start, hparams):
                 param_group['lr'] = learning_rate
 
             # prepare data
-            text, mel_target, text_length = parse_batch(batch, device)
+            text, mel_target, text_length, stop_target = parse_batch(batch, device)
 
             # Forward pass
             # Parallelize model onto GPUS using workaround due to python bug
             if parallel_run:
-                mel_predict, spec_predict, attention = data_parallel_workaround(model, text, mel_target, text_length)
+                mel_predict, spec_predict, stop_predict, attention = data_parallel_workaround(model, text, mel_target, text_length)
             else:
-                mel_predict, spec_predict, attention = model(text, mel_target, text_length)
+                mel_predict, spec_predict, stop_predict, attention = model(text, mel_target, text_length)
 
             # Loss
-            predicts = (mel_predict, spec_predict, attention)
-            targets  = (mel_target, mel_target)
-            loss, mel_loss, spec_loss = criterion(predicts, targets)
+            predicts = (mel_predict, spec_predict, stop_predict, attention)
+            targets  = (mel_target, mel_target, stop_target)
+            loss = criterion(predicts, targets)
 
             # Backward pass
             optimizer.zero_grad()
