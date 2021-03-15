@@ -217,7 +217,23 @@ class Tacotron(nn.Module):
         self.postnet = CBHG(mel_dim, **postnet_cfg)
         self.last_linear = nn.Linear(postnet_out_dim, linear_dim)
 
-    def forward(self, inputs, targets=None, input_lengths=None):
+    def parse_data_batch(self, batch):
+        """Parse data batch to form inputs and targets for model training/evaluating
+        """
+        # use same device as parameters
+        device = next(self.parameters()).device
+
+        text, text_length, mel, stop, _ = batch
+        text = text.to(device).long()
+        text_length = text_length.to(device).long()
+        mel = mel.transpose(1, 2).to(device).float()
+        stop = stop.to(device).float()
+
+        return (text, mel, text_length), (mel, mel, stop)
+
+    def forward(self, inputs):
+        inputs, targets, input_lengths = inputs
+
         B = inputs.size(0)
 
         # (B, T)
@@ -245,6 +261,11 @@ class Tacotron(nn.Module):
         linear_outputs = self.last_linear(linear_outputs)
 
         return mel_outputs, linear_outputs, stop_tokens, alignments
+
+    def inference(self, inputs):
+        # Only text inputs
+        inputs = inputs, None, None
+        return self.forward(inputs)
 
 
 class TacotronLoss(nn.Module):
