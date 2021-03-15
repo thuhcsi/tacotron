@@ -33,6 +33,7 @@ class Hparams:
         ################################
         # Model Parameters             #
         ################################
+        self.tacotron_version = "1"  # 1: Tacotron; 2: Tacotron-2
         self.tacotron_config = "tacotron1.json"
 
         self.n_symbols = len(symbols(self.symbols_lang))

@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from model.tacotron import Tacotron, TacotronLoss
+from model.tacotron2 import Tacotron2, Tacotron2Loss
 from utils.dataset import TextMelDataset, TextMelCollate
 from utils.logger import TacotronLogger
 from utils.utils import data_parallel_workaround
@@ -23,21 +24,30 @@ def prepare_datasets(hparams):
 
 
 def create_model(hparams):
-    # Tacotron model
+    # Model config
     with open(hparams.tacotron_config, 'r') as f:
         model_cfg = json.load(f)
-    model = Tacotron(n_vocab=hparams.n_symbols,
-                     embed_dim=hparams.symbols_embedding_dim,
-                     mel_dim=hparams.n_mel_channels,
-                     linear_dim=hparams.n_mel_channels,
-                     max_decoder_steps=hparams.max_decoder_steps,
-                     stop_threshold=hparams.gate_threshold,
-                     r=hparams.n_frames_per_step,
-                     use_memory_mask=True,
-                     model_cfg=model_cfg,
-                     )
-    # Loss criterion
-    criterion = TacotronLoss()
+    if hparams.tacotron_version == "1":
+        # Tacotron model
+        model = Tacotron(n_vocab=hparams.n_symbols,
+                         embed_dim=hparams.symbols_embedding_dim,
+                         mel_dim=hparams.n_mel_channels,
+                         linear_dim=hparams.n_mel_channels,
+                         max_decoder_steps=hparams.max_decoder_steps,
+                         stop_threshold=hparams.gate_threshold,
+                         r=hparams.n_frames_per_step,
+                         use_memory_mask=True,
+                         model_cfg=model_cfg,
+                         )
+        # Loss criterion
+        criterion = TacotronLoss()
+    elif hparams.tacotron_version == "2":
+        # Tacotron2 model
+        model = Tacotron2(hparams)
+        # Loss criterion
+        criterion = Tacotron2Loss()
+    else:
+        raise ValueError("Unsupported Tacotron version: {} ".format(hparams.tacotron_version))
     #
     return model, criterion
 
