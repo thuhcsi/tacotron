@@ -62,10 +62,10 @@ class Decoder(nn.Module):
             [nn.GRUCell(decoder_rnn_units, decoder_rnn_units) for _ in range(decoder_rnn_layers)])
 
         # Project to mel
-        self.mel_proj = nn.Linear(decoder_rnn_units, mel_dim * r)
+        self.mel_proj = nn.Linear(decoder_rnn_units + attention_context_dim, mel_dim * r)
 
         # Stop token prediction
-        self.stop_proj = nn.Linear(decoder_rnn_units, 1)
+        self.stop_proj = nn.Linear(decoder_rnn_units + attention_context_dim, 1)
 
     def forward(self, encoder_outputs, inputs=None, memory_lengths=None):
         """
@@ -142,13 +142,15 @@ class Decoder(nn.Module):
                     decoder_input, decoder_rnn_hiddens[idx])
                 # Residual connectinon
                 decoder_input = decoder_rnn_hiddens[idx] + decoder_input
-            decoder_output = decoder_input
+
+            # Contact RNN output and context vector to form projection input
+            proj_input = torch.cat((decoder_input, attention_context), -1)
 
             # Project to mel
-            output = self.mel_proj(decoder_output)
+            output = self.mel_proj(proj_input)
 
             # Stop token prediction
-            stop = self.stop_proj(decoder_output)
+            stop = self.stop_proj(proj_input)
             stop = torch.sigmoid(stop)
 
             # Store predictions
