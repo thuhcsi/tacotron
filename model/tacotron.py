@@ -30,12 +30,13 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, mel_dim, r, encoder_output_dim,
                  prenet_dims=[256, 128], prenet_dropout=0.5,
-                 attention_context_dim=256, attention_rnn_units=256,
+                 attention_dim=256, attention_rnn_units=256,
                  decoder_rnn_units=256, decoder_rnn_layers=2,
                  max_decoder_steps=1000, stop_threshold=0.5):
         super(Decoder, self).__init__()
         self.mel_dim = mel_dim
         self.r = r
+        self.attention_context_dim = attention_context_dim = encoder_output_dim
         self.attention_rnn_units = attention_rnn_units
         self.decoder_rnn_units = decoder_rnn_units
         self.max_decoder_steps = max_decoder_steps // r
@@ -45,14 +46,13 @@ class Decoder(nn.Module):
         self.prenet = Prenet(mel_dim * r, prenet_dims, prenet_dropout)
 
         # Attention RNN
-        # (prenet_out + attention context) -> output
-        assert attention_context_dim == attention_rnn_units
+        # (prenet_out + attention context) = attention_rnn_in -> attention_rnn_out
         self.attention_rnn = AttentionWrapper(
             nn.GRUCell(prenet_dims[-1] + attention_context_dim, attention_rnn_units),
-            BahdanauAttention(attention_context_dim)
+            BahdanauAttention(attention_rnn_units, attention_dim)
         )
         # Process encoder_output as attention key
-        self.memory_layer = nn.Linear(encoder_output_dim, attention_context_dim, bias=False)
+        self.memory_layer = nn.Linear(encoder_output_dim, attention_dim, bias=False)
 
         # Decoder RNN
         # (attention_rnn_out + attention context) -> decoder_rnn_in
@@ -71,15 +71,18 @@ class Decoder(nn.Module):
         """
         Decoder forward step.
 
-        If decoder inputs are not given (e.g., at testing time), as noted in
-        Tacotron paper, greedy decoding is adapted.
+        If decoder inputs are not given (e.g., at testing time), greedy decoding is adapted.
 
         Args:
             encoder_outputs: Encoder outputs. (B, T_encoder, dim)
-            inputs: Decoder inputs. i.e., mel-spectrogram. If None (at eval-time),
-              decoder outputs are used as decoder inputs.
-            memory_lengths: Encoder output (memory) lengths. If not None, used for
-              attention masking.
+            inputs: Decoder inputs (i.e., mel-spectrogram).
+                    If None (at eval-time), previous decoder outputs are used as decoder inputs.
+            memory_lengths: Encoder output (memory) lengths. If not None, used for attention masking.
+
+        Returns:
+            mel_outputs: mel outputs from the decoder.
+            stop_tokens: stop token outputs from the decoder.
+            attn_scores: sequence of attention weights from the decoder.
         """
         B = encoder_outputs.size(0)
 
@@ -101,6 +104,10 @@ class Decoder(nn.Module):
             assert inputs.size(-1) == self.mel_dim * self.r
             T_decoder = inputs.size(1)
 
+        # Time first (T', B, mel_dim*r)
+        if inputs is not None:
+            inputs = inputs.transpose(0, 1)
+
         # <GO> frames
         initial_input = encoder_outputs.data.new(B, self.mel_dim * self.r).zero_()
 
@@ -108,12 +115,9 @@ class Decoder(nn.Module):
         attention_rnn_hidden = encoder_outputs.data.new(B, self.attention_rnn_units).zero_()
         decoder_rnn_hiddens = [encoder_outputs.data.new(B, self.decoder_rnn_units).zero_()
                                for _ in range(len(self.decoder_rnns))]
-        attention_context = encoder_outputs.data.new(B, self.attention_rnn_units).zero_()
+        attention_context = encoder_outputs.data.new(B, self.attention_context_dim).zero_()
 
-        # Time first (T', B, mel_dim*4)
-        if inputs is not None:
-            inputs = inputs.transpose(0, 1)
-
+        # To save the result
         mel_outputs, attn_scores, stop_tokens = [], [], []
 
         # Run the decoder loop
@@ -179,7 +183,7 @@ class Decoder(nn.Module):
         mel_outputs = torch.stack(mel_outputs).transpose(0, 1).contiguous()
         stop_tokens = torch.stack(stop_tokens).transpose(0, 1).squeeze(2)
 
-        return mel_outputs, attn_scores, stop_tokens
+        return mel_outputs, stop_tokens, attn_scores
 
 
 def is_end_of_frames(output, eps=-3.4):
@@ -248,7 +252,7 @@ class Tacotron(nn.Module):
             memory_lengths = None
 
         # (B, T', mel_dim*r)
-        mel_outputs, alignments, stop_tokens = self.decoder(
+        mel_outputs, stop_tokens, alignments = self.decoder(
             encoder_outputs, targets, memory_lengths=memory_lengths)
 
         # Post net processing below

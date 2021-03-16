@@ -15,8 +15,8 @@
     "decoder":{
         "prenet_dims": [256, 128],
         "prenet_dropout": 0.5,
+        "attention_dim": 256,
         "attention_rnn_units": 256,
-        "attention_context_dim": 256,
         "decoder_rnn_units": 256,
         "decoder_rnn_layers": 2
     },

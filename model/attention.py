@@ -5,11 +5,13 @@ from torch import nn
 
 
 class BahdanauAttention(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, query_dim, attn_dim):
         super(BahdanauAttention, self).__init__()
-        self.query_layer = nn.Linear(dim, dim, bias=False)
+        # query layer to project query to hidden representation
+        # (query_dim -> attn_dim)
+        self.query_layer = nn.Linear(query_dim, attn_dim, bias=False)
         self.tanh = nn.Tanh()
-        self.v = nn.Linear(dim, 1, bias=False)
+        self.v = nn.Linear(attn_dim, 1, bias=False)
 
     def forward(self, query, processed_memory):
         """
