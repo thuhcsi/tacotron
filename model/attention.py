@@ -66,9 +66,15 @@ class AttentionWrapper(nn.Module):
         # Feed it to RNN
         cell_output = self.rnn_cell(cell_input, cell_state)
 
+        # GRUCell or LSTMCell
+        if type(self.rnn_cell) is nn.LSTMCell:
+            query = cell_output[0]
+        else:
+            query = cell_output
+
         # Alignment
         # (batch, max_time)
-        alignment = self.attention_mechanism(cell_output, processed_memory)
+        alignment = self.attention_mechanism(query, processed_memory)
 
         if mask is not None:
             mask = mask.view(query.size(0), -1)
