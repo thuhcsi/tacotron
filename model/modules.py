@@ -4,7 +4,12 @@
 import torch
 from torch import nn
 
+
 class Prenet(nn.Module):
+    """
+    Prenet
+        - Several linear layers with ReLU activation and dropout regularization
+    """
     def __init__(self, in_dim, sizes=[256, 128], dropout=0.5):
         super(Prenet, self).__init__()
         in_sizes = [in_dim] + sizes[:-1]
@@ -21,6 +26,16 @@ class Prenet(nn.Module):
 
 
 class BatchNormConv1d(nn.Module):
+    """
+    BatchNormConv1d
+        - 1-d convolution layer with specific activation function, followed by Batch Normalization (BN)
+
+    Batch Norm before activation or after the activation?
+    Still in debation!
+    In practace, applying batch norm after the activation yields bettr results.
+        - https://blog.paperspace.com/busting-the-myths-about-batch-normalization/
+        - https://medium.com/@nihar.kanungo/batch-normalization-and-activation-function-sequence-confusion-4e075334b4cc
+    """
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, activation=None):
         super(BatchNormConv1d, self).__init__()
         self.conv1d = nn.Conv1d(in_channels, out_channels,
@@ -37,6 +52,9 @@ class BatchNormConv1d(nn.Module):
 
 
 class Highway(nn.Module):
+    """
+    Highway network
+    """
     def __init__(self, size):
         super(Highway, self).__init__()
         self.H = nn.Linear(size, size)
@@ -53,7 +71,8 @@ class Highway(nn.Module):
 
 
 class CBHG(nn.Module):
-    """CBHG module: a recurrent neural network composed of:
+    """
+    CBHG module: a recurrent neural network composed of:
         - 1-d convolution bank
         - Highway networks + residual connections
         - Bidirectional gated recurrent units (Bi-GRU)
