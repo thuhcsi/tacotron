@@ -18,7 +18,7 @@ def prepare_datasets(hparams):
     # Get data, data loaders and collate function ready
     trainset = TextMelDataset(hparams.training_files, hparams)
     valset = TextMelDataset(hparams.validation_files, hparams)
-    collate_fn = TextMelCollate(hparams.n_frames_per_step)
+    collate_fn = TextMelCollate(hparams.r)
     #
     return trainset, valset, collate_fn
 
@@ -29,13 +29,13 @@ def create_model(hparams):
         model_cfg = json.load(f)
     if hparams.tacotron_version == "1":
         # Tacotron model
-        model = Tacotron(n_vocab=hparams.n_symbols,
-                         embed_dim=hparams.symbols_embedding_dim,
-                         mel_dim=hparams.n_mel_channels,
-                         linear_dim=hparams.n_mel_channels,
+        model = Tacotron(n_vocab=hparams.num_symbols,
+                         embed_dim=hparams.symbols_embed_dim,
+                         mel_dim=hparams.mel_dim,
+                         linear_dim=hparams.mel_dim,
                          max_decoder_steps=hparams.max_decoder_steps,
-                         stop_threshold=hparams.gate_threshold,
-                         r=hparams.n_frames_per_step,
+                         stop_threshold=hparams.stop_threshold,
+                         r=hparams.r,
                          use_memory_mask=True,
                          model_cfg=model_cfg
                          )
@@ -43,12 +43,12 @@ def create_model(hparams):
         criterion = TacotronLoss()
     elif hparams.tacotron_version == "2":
         # Tacotron2 model
-        model = Tacotron2(n_vocab=hparams.n_symbols,
-                          embed_dim=hparams.symbols_embedding_dim,
-                          mel_dim=hparams.n_mel_channels,
+        model = Tacotron2(n_vocab=hparams.num_symbols,
+                          embed_dim=hparams.symbols_embed_dim,
+                          mel_dim=hparams.mel_dim,
                           max_decoder_steps=hparams.max_decoder_steps,
-                          stop_threshold=hparams.gate_threshold,
-                          r=hparams.n_frames_per_step,
+                          stop_threshold=hparams.stop_threshold,
+                          r=hparams.r,
                           use_memory_mask=True,
                           model_cfg=model_cfg
                           )

@@ -14,8 +14,8 @@ class TextMelDataset(torch.utils.data.Dataset):
     """
     def __init__(self, fname, hparams):
         self.text_cleaners  = hparams.text_cleaners
-        self.symbols_lang   = hparams.symbols_lang
-        self.n_mel_channels = hparams.n_mel_channels
+        self.symbols_lang = hparams.symbols_lang
+        self.mel_dim = hparams.mel_dim
         self.f_list = self.files_to_list(fname)
         random.seed(hparams.seed)
         random.shuffle(self.f_list)
@@ -39,10 +39,9 @@ class TextMelDataset(torch.utils.data.Dataset):
 
     def get_mel(self, file_path):
         #stored melspec: np.ndarray [shape=(T_out, num_mels)]
-        #in Pytorch [shape=(num_mels, T_out)]
-        melspec = torch.from_numpy(np.load(file_path).T)
-        assert melspec.size(0) == self.n_mel_channels, (
-            'Mel dimension mismatch: given {}, expected {}'.format(melspec.size(0), self.n_mel_channels))
+        melspec = torch.from_numpy(np.load(file_path))
+        assert melspec.size(1) == self.mel_dim, (
+            'Mel dimension mismatch: given {}, expected {}'.format(melspec.size(0), self.mel_dim))
 
         return melspec
 
@@ -60,8 +59,8 @@ class TextMelDataset(torch.utils.data.Dataset):
 class TextMelCollate():
     """ Zero-pads model inputs and targets based on number of frames per step
     """
-    def __init__(self, n_frames_per_step):
-        self.n_frames_per_step = n_frames_per_step
+    def __init__(self, r):
+        self.r = r
 
     def __call__(self, batch):
         """Collate's training batch from normalized text and mel-spectrogram
@@ -82,22 +81,22 @@ class TextMelCollate():
             text_padded[i, :text.size(0)] = text
 
         # Right zero-pad mel-spec
-        num_mels = batch[0][1].size(0)
-        max_target_len = max([x[1].size(1) for x in batch])
-        if max_target_len % self.n_frames_per_step != 0:
-            max_target_len += self.n_frames_per_step - max_target_len % self.n_frames_per_step
-            assert max_target_len % self.n_frames_per_step == 0
+        num_mels = batch[0][1].size(1)
+        max_target_len = max([x[1].size(0) for x in batch])
+        if max_target_len % self.r != 0:
+            max_target_len += self.r - max_target_len % self.r
+            assert max_target_len % self.r == 0
 
         # include mel padded and gate padded
-        mel_padded = torch.FloatTensor(len(batch), num_mels, max_target_len)
+        mel_padded = torch.FloatTensor(len(batch), max_target_len, num_mels)
         mel_padded.zero_()
         gate_padded = torch.FloatTensor(len(batch), max_target_len)
         gate_padded.zero_()
         output_lengths = torch.LongTensor(len(batch))
         for i in range(len(ids_sorted_decreasing)):
             mel = batch[ids_sorted_decreasing[i]][1]
-            mel_padded[i, :, :mel.size(1)] = mel
-            gate_padded[i, mel.size(1)-1:] = 1
-            output_lengths[i] = mel.size(1)
+            mel_padded[i, :mel.size(0), :] = mel
+            gate_padded[i, mel.size(0)-1:] = 1
+            output_lengths[i] = mel.size(0)
 
         return text_padded, input_lengths, mel_padded, gate_padded, output_lengths

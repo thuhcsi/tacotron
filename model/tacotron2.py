@@ -263,7 +263,7 @@ class Tacotron2(nn.Module):
         text, text_length, mel, stop, mel_length = batch
         text = text.to(device).long()
         text_length = text_length.to(device).long()
-        mel = mel.transpose(1, 2).to(device).float()
+        mel = mel.to(device).float()
         stop = stop.to(device).float()
 
         return (text, text_length, mel), (mel, stop)

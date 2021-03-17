@@ -26,45 +26,17 @@ class Hparams:
         self.symbols_lang = "en"  # en: English characters; py: Chinese Pinyin symbols
 
         ################################
-        # Audio Parameters             #
-        ################################
-        self.n_mel_channels = 80
-
-        ################################
         # Model Parameters             #
         ################################
         self.tacotron_version = "1"  # 1: Tacotron; 2: Tacotron-2
         self.tacotron_config = "tacotron1.json"
 
-        self.n_symbols = len(symbols(self.symbols_lang))
-        self.symbols_embedding_dim = 512
-
-        # Encoder parameters
-        self.encoder_kernel_size = 5
-        self.encoder_n_convolutions = 3
-        self.encoder_embedding_dim = 512
-
-        # Decoder parameters
-        self.n_frames_per_step = 3
-        self.decoder_rnn_dim = 1024
-        self.prenet_dim = 256
+        self.num_symbols = len(symbols(self.symbols_lang))
+        self.symbols_embed_dim = 512
+        self.mel_dim = 80
+        self.r = 3
         self.max_decoder_steps = 1000
-        self.gate_threshold = 0.5
-        self.p_attention_dropout = 0.1
-        self.p_decoder_dropout = 0.1
-
-        # Attention parameters
-        self.attention_rnn_dim = 1024
-        self.attention_dim = 128
-
-        # Location Layer parameters
-        self.attention_location_n_filters = 32
-        self.attention_location_kernel_size = 31
-
-        # Mel-post processing network parameters
-        self.postnet_embedding_dim = 512
-        self.postnet_kernel_size = 5
-        self.postnet_n_convolutions = 5
+        self.stop_threshold = 0.5
 
         ################################
         # Optimization Hyperparameters #
