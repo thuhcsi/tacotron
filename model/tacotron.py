@@ -183,6 +183,9 @@ class Decoder(nn.Module):
         mel_outputs = torch.stack(mel_outputs).transpose(0, 1).contiguous()
         stop_tokens = torch.stack(stop_tokens).transpose(0, 1).squeeze(2)
 
+        # (B, T', mel_dim*r) -> (B, T, mel_dim)
+        mel_outputs = mel_outputs.reshape(B, -1, self.mel_dim)
+
         return mel_outputs, stop_tokens, attn_scores
 
 
@@ -251,16 +254,11 @@ class Tacotron(nn.Module):
         else:
             memory_lengths = None
 
-        # (B, T', mel_dim*r)
+        # (B, T, mel_dim)
         mel_outputs, stop_tokens, alignments = self.decoder(
             encoder_outputs, targets, memory_lengths=memory_lengths)
 
-        # Post net processing below
-
-        # Reshape
-        # (B, T, mel_dim)
-        mel_outputs = mel_outputs.reshape(B, -1, self.mel_dim)
-
+        # Postnet processing
         linear_outputs = self.postnet(mel_outputs)
         linear_outputs = self.last_linear(linear_outputs)
 
