@@ -1,7 +1,14 @@
 # PyTacotron
 
-PyTorch implementation of [Tacotron: Towards End-to-End Speech Synthesis](https://arxiv.org/abs/1703.10135).
+PyTorch implementation of [Tacotron: Towards End-to-End Speech Synthesis](https://arxiv.org/abs/1703.10135), and  
+PyTorch implementation of [Natural TTS synthesis by conditioning Wavenet on MEL spectogram predictions](https://arxiv.org/abs/1712.05884).
 
+## Features
+
+- Easy switch between [Tacotron](https://arxiv.org/abs/1703.10135) and [Tacotron2](https://arxiv.org/abs/1712.05884)
+- Detailed model structure configuration with json
+    - For Tacotron: [tacotron1.json](tacotron1.json)
+    - For Tacotron2: [tacotron2.json](tacotron2.json)
 
 ## Setup
 1. Prepare `DATASET` directory
@@ -14,17 +21,19 @@ PyTorch implementation of [Tacotron: Towards End-to-End Speech Synthesis](https:
 
 
 ## Training
+
+### Training from scratch
 1. `python train.py -o outdir -l logdir`
 2. (OPTIONAL) `tensorboard --logdir=logdir`
 
-## Training using a pre-trained model
+### Training using a pre-trained model
 Training using a pre-trained model can lead to faster convergence  
 By default, the dataset dependent text embedding layers are ignored
 
 1. Download the published Tacotron model
 2. `python train.py -o outdir -l logdir -c tacotron_statedict.pt --warm_start`
 
-## Multi-GPU (distributed) Training
+### Multi-GPU (distributed) Training
 1. `python train.py -o outdir -l logdir --hparams=distributed_run=True`
 
 
