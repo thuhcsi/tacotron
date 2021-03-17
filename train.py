@@ -37,13 +37,21 @@ def create_model(hparams):
                          stop_threshold=hparams.gate_threshold,
                          r=hparams.n_frames_per_step,
                          use_memory_mask=True,
-                         model_cfg=model_cfg,
+                         model_cfg=model_cfg
                          )
         # Loss criterion
         criterion = TacotronLoss()
     elif hparams.tacotron_version == "2":
         # Tacotron2 model
-        model = Tacotron2(hparams)
+        model = Tacotron2(n_vocab=hparams.n_symbols,
+                          embed_dim=hparams.symbols_embedding_dim,
+                          mel_dim=hparams.n_mel_channels,
+                          max_decoder_steps=hparams.max_decoder_steps,
+                          stop_threshold=hparams.gate_threshold,
+                          r=hparams.n_frames_per_step,
+                          use_memory_mask=True,
+                          model_cfg=model_cfg
+                          )
         # Loss criterion
         criterion = Tacotron2Loss()
     else:

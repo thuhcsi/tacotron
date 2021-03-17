@@ -19,7 +19,10 @@ class TacotronLogger(SummaryWriter):
         self.add_scalar("validation.loss", loss, iteration)
 
         _, spec_predicts, stop_predicts, alignments = predicts
-        _, spec_targets, stop_targets  = targets
+        if len(targets) == 3:
+            _, spec_targets, stop_targets  = targets
+        else:
+            spec_targets, stop_targets  = targets
         spec_targets = spec_targets.transpose(1, 2)
         spec_predicts = spec_predicts.transpose(1, 2)
 
