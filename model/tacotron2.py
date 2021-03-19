@@ -79,11 +79,11 @@ class Decoder(nn.Module):
         self.attention_context_dim = attention_context_dim = encoder_output_dim
         self.attention_rnn_units = attention_rnn_units
         self.decoder_rnn_units = decoder_rnn_units
-        self.max_decoder_steps = max_decoder_steps // r
+        self.max_decoder_steps = max_decoder_steps
         self.stop_threshold = stop_threshold
 
         # Prenet
-        self.prenet = Prenet(mel_dim * r, prenet_dims, prenet_dropout)
+        self.prenet = Prenet(mel_dim, prenet_dims, prenet_dropout)
 
         # Attention RNN
         # (prenet_out + attention context) = attention_rnn_in -> attention_rnn_out
@@ -102,7 +102,7 @@ class Decoder(nn.Module):
         self.decoder_dropout = nn.Dropout(decoder_dropout)
 
         # Project to mel
-        self.mel_proj = nn.Linear(decoder_rnn_units + attention_context_dim, mel_dim * r)
+        self.mel_proj = nn.Linear(decoder_rnn_units + attention_context_dim, mel_dim * self.r)
 
         # Stop token prediction
         self.stop_proj = nn.Linear(decoder_rnn_units + attention_context_dim, 1)
@@ -137,20 +137,13 @@ class Decoder(nn.Module):
         # Run greedy decoding if inputs is None
         greedy = inputs is None
 
-        # (B, T, mel_dim) -> (B, T', mel_dim*r)
-        if inputs is not None:
-            # Grouping multiple frames if necessary
-            if inputs.size(-1) == self.mel_dim:
-                inputs = inputs.reshape(B, inputs.size(1) // self.r, -1)
-            assert inputs.size(-1) == self.mel_dim * self.r
-            T_decoder = inputs.size(1)
-
-        # Time first (T', B, mel_dim*r)
+        # Time first: (B, T, mel_dim) -> (T, B, mel_dim)
         if inputs is not None:
             inputs = inputs.transpose(0, 1)
+            T_decoder = inputs.size(0)
 
         # <GO> frames
-        initial_input = encoder_outputs.data.new(B, self.mel_dim * self.r).zero_()
+        initial_input = encoder_outputs.data.new(B, self.mel_dim).zero_()
 
         # Init decoder states
         self.attention_rnn.attention_mechanism.init_attention(processed_memory)
@@ -168,8 +161,8 @@ class Decoder(nn.Module):
         current_input = initial_input
         while True:
             if t > 0:
-                current_input = mel_outputs[-1] if greedy else inputs[t - 1]
-            t += 1
+                current_input = mel_outputs[-1][:, -1, :] if greedy else inputs[t - 1]
+            t += self.r
 
             # Prenet
             current_input = self.prenet(current_input)
@@ -191,16 +184,18 @@ class Decoder(nn.Module):
             proj_input = torch.cat((decoder_rnn_hidden, attention_context), -1)
 
             # Project to mel
+            # (B, mel_dim*r) -> (B, r, mel_dim)
             output = self.mel_proj(proj_input)
+            output = output.view(B, -1, self.mel_dim)
 
             # Stop token prediction
             stop = self.stop_proj(proj_input)
             stop = torch.sigmoid(stop)
 
             # Store predictions
-            mel_outputs += [output]
-            attn_scores += [attention_score]
-            stop_tokens += [stop] * self.r
+            mel_outputs.append(output)
+            attn_scores.append(attention_score.unsqueeze(1))
+            stop_tokens.extend([stop] * self.r)
 
             if greedy:
                 if stop > self.stop_threshold:
@@ -212,16 +207,13 @@ class Decoder(nn.Module):
                 if t >= T_decoder:
                     break
 
+        # To tensor
+        mel_outputs = torch.cat(mel_outputs, dim=1) # (B, T_decoder, mel_dim)
+        attn_scores = torch.cat(attn_scores, dim=1) # (B, T_decoder/r, T_encoder)
+        stop_tokens = torch.cat(stop_tokens, dim=1) # (B, T_decoder)
+
         # Validation check
-        assert greedy or len(mel_outputs) == T_decoder
-
-        # Back to batch first
-        attn_scores = torch.stack(attn_scores).transpose(0, 1)
-        mel_outputs = torch.stack(mel_outputs).transpose(0, 1).contiguous()
-        stop_tokens = torch.stack(stop_tokens).transpose(0, 1).squeeze(2)
-
-        # (B, T', mel_dim*r) -> (B, T, mel_dim)
-        mel_outputs = mel_outputs.reshape(B, -1, self.mel_dim)
+        assert greedy or mel_outputs.size(1) == T_decoder
 
         return mel_outputs, stop_tokens, attn_scores
 
