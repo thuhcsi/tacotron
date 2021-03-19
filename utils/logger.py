@@ -47,5 +47,5 @@ class TacotronLogger(SummaryWriter):
             "stop_token",
             plot_gate_outputs_to_numpy(
                 stop_targets[idx].data.cpu().numpy(),
-                torch.sigmoid(stop_predicts[idx]).data.cpu().numpy()),
+                stop_predicts[idx].data.cpu().numpy()),
             iteration, dataformats='HWC')

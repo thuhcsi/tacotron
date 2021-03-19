@@ -28,8 +28,8 @@ class Hparams:
         ################################
         # Model Parameters             #
         ################################
-        self.tacotron_version = "1"  # 1: Tacotron; 2: Tacotron-2
-        self.tacotron_config = "tacotron1.json"
+        self.tacotron_version = "2"  # 1: Tacotron; 2: Tacotron-2
+        self.tacotron_config = "tacotron2.json"
 
         self.num_symbols = len(symbols(self.symbols_lang))
         self.symbols_embed_dim = 512
