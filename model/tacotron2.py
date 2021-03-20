@@ -66,7 +66,11 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, mel_dim, r, encoder_output_dim,
+    # Class variable because its value doesn't change between classes
+    # yet ought to be scoped by class because its a property of a Decoder
+    max_r = 10
+
+    def __init__(self, mel_dim, encoder_output_dim,
                  prenet_dims=[256, 256], prenet_dropout=0.5,
                  attention_dim=128, attention_rnn_units=1024, attention_dropout=0.1,
                  attention_location_filters=32, attention_location_kernel_size=31,
@@ -74,8 +78,9 @@ class Decoder(nn.Module):
                  max_decoder_steps=1000, stop_threshold=0.5):
         super(Decoder, self).__init__()
 
+        self.register_buffer("r", torch.tensor(1, dtype=torch.int))
+
         self.mel_dim = mel_dim
-        self.r = r
         self.attention_context_dim = attention_context_dim = encoder_output_dim
         self.attention_rnn_units = attention_rnn_units
         self.decoder_rnn_units = decoder_rnn_units
@@ -102,7 +107,7 @@ class Decoder(nn.Module):
         self.decoder_dropout = nn.Dropout(decoder_dropout)
 
         # Project to mel
-        self.mel_proj = nn.Linear(decoder_rnn_units + attention_context_dim, mel_dim * self.r)
+        self.mel_proj = nn.Linear(decoder_rnn_units + attention_context_dim, mel_dim * self.max_r)
 
         # Stop token prediction
         self.stop_proj = nn.Linear(decoder_rnn_units + attention_context_dim, 1)
@@ -184,9 +189,9 @@ class Decoder(nn.Module):
             proj_input = torch.cat((decoder_rnn_hidden, attention_context), -1)
 
             # Project to mel
-            # (B, mel_dim*r) -> (B, r, mel_dim)
+            # (B, mel_dim*max_r) -> (B, max_r, mel_dim) -> (B, r, mel_dim)
             output = self.mel_proj(proj_input)
-            output = output.view(B, -1, self.mel_dim)
+            output = output.view(B, -1, self.mel_dim)[:, :self.r, :]
 
             # Stop token prediction
             stop = self.stop_proj(proj_input)
@@ -220,7 +225,7 @@ class Decoder(nn.Module):
 
 class Tacotron2(nn.Module):
     def __init__(self, model_cfg, n_vocab, embed_dim=512, mel_dim=80,
-                 max_decoder_steps=1000, stop_threshold=0.5, r=3):
+                 max_decoder_steps=1000, stop_threshold=0.5):
         super(Tacotron2, self).__init__()
 
         self.mel_dim = mel_dim
@@ -238,12 +243,20 @@ class Tacotron2(nn.Module):
 
         # Decoder
         decoder_cfg = model_cfg["decoder"]
-        self.decoder = Decoder(mel_dim, r, encoder_out_dim, **decoder_cfg,
+        self.decoder = Decoder(mel_dim, encoder_out_dim, **decoder_cfg,
             max_decoder_steps=max_decoder_steps, stop_threshold=stop_threshold)
 
         # Postnet
         postnet_cfg = model_cfg["postnet"]
         self.postnet = Postnet(mel_dim, **postnet_cfg)
+
+    @property
+    def r(self):
+        return self.decoder.r.item()
+
+    @r.setter
+    def r(self, value):
+        self.decoder.r = self.decoder.r.new_tensor(value, requires_grad=False)
 
     def parse_data_batch(self, batch):
         """Parse data batch to form inputs and targets for model training/evaluating

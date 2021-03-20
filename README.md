@@ -9,6 +9,7 @@ PyTorch implementation of [Natural TTS synthesis by conditioning Wavenet on MEL 
 - Detailed model structure configuration with json
     - For Tacotron: [tacotron1.json](tacotron1.json)
     - For Tacotron2: [tacotron2.json](tacotron2.json)
+- Dynamic reduction factor (r) changing along with training schedule
 
 ## Setup
 1. Prepare `DATASET` directory
