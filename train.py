@@ -14,15 +14,6 @@ from utils.utils import data_parallel_workaround
 from hparams import create_hparams
 
 
-def prepare_datasets(hparams):
-    # Get data, data loaders and collate function ready
-    trainset = TextMelDataset(hparams.training_files, hparams)
-    valset = TextMelDataset(hparams.validation_files, hparams)
-    collate_fn = TextMelCollate(hparams.r)
-    #
-    return trainset, valset, collate_fn
-
-
 def create_model(hparams):
     # Model config
     with open(hparams.tacotron_config, 'r') as f:
@@ -81,14 +72,16 @@ def load_checkpoint(checkpoint_path, model, optimizer):
     optimizer.load_state_dict(checkpoint['optimizer'])
     learning_rate = checkpoint['learning_rate']
     iteration = checkpoint['iteration']
+    epoch = checkpoint['epoch']
 
-    print("Loaded checkpoint '{}' from iteration {}" .format(checkpoint_path, iteration))
-    return model, optimizer, learning_rate, iteration
+    print("Loaded checkpoint '{}' from iteration {} (epoch {})" .format(checkpoint_path, iteration, epoch))
+    return model, optimizer, learning_rate, iteration, epoch
 
 
-def save_checkpoint(checkpoint_path, model, optimizer, learning_rate, iteration):
+def save_checkpoint(checkpoint_path, model, optimizer, learning_rate, iteration, epoch):
     print("Saving model and optimizer state at iteration {} to {}".format(iteration, checkpoint_path))
     torch.save({'iteration': iteration,
+                'epoch': epoch,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'learning_rate': learning_rate}, checkpoint_path)
@@ -137,6 +130,11 @@ def train(output_dir, log_dir, checkpoint_path, warm_start, hparams):
     # Prepare device
     if torch.cuda.is_available():
         device = torch.device("cuda")
+
+        for session in hparams.schedule:
+            _, _, _, batch_size = session
+            if batch_size % torch.cuda.device_count() != 0:
+                raise ValueError("`batch_size` must be evenly divisible by n_gpus!")
     else:
         device = torch.device("cpu")
     print("Using device:", device)
@@ -150,43 +148,70 @@ def train(output_dir, log_dir, checkpoint_path, warm_start, hparams):
     model = model.to(device)
 
     # Initialize the optimizer
-    learning_rate = hparams.learning_rate
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
-                                 weight_decay=hparams.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters())
 
     # Prepare directory and logger
     os.makedirs(output_dir, exist_ok=True)
     logger = TacotronLogger(log_dir)
 
-    # Prepare dataset and dataloader
-    trainset, valset, collate_fn = prepare_datasets(hparams)
-    train_loader = DataLoader(trainset, sampler=None, num_workers=1,
-                              shuffle=True, batch_size=hparams.batch_size,
-                              pin_memory=False, drop_last=True, collate_fn=collate_fn)
+    # Prepare dataset
+    trainset = TextMelDataset(hparams.training_files, hparams)
+    valset = TextMelDataset(hparams.validation_files, hparams)
 
     # Load checkpoint if one exists
-    iteration    = -1 # will add 1 in main loop
-    epoch_offset = 0
+    iteration = -1 # will add 1 in main loop
+    epoch = 0
     if checkpoint_path is not None:
         if warm_start:
             model = warm_start_model(checkpoint_path, model, hparams.ignore_layers)
         else:
-            model, optimizer, _learning_rate, iteration = load_checkpoint(checkpoint_path, model, optimizer)
-            if hparams.use_saved_learning_rate:
-                learning_rate = _learning_rate
-            epoch_offset = max(0, int(iteration / len(train_loader)))
+            model, optimizer, learning_rate, iteration, epoch = load_checkpoint(checkpoint_path, model, optimizer)
 
     # ================ MAIN TRAINNIG LOOP! ===================
     model.train()
-    model.r = hparams.r
-    for epoch in range(epoch_offset, hparams.epochs):
-        print("Epoch: {}".format(epoch))
-        for i, batch in enumerate(train_loader):
+    for i, session in enumerate(hparams.schedule):
+        r, learning_rate, max_iters, batch_size = session
+
+        # Switch to the right session
+        if iteration >= max_iters:
+            if i == len(hparams.schedule) - 1:
+                # We have completed training. Save the model and exit
+                checkpoint_path = os.path.join(output_dir, "checkpoint_{}".format(iteration))
+                save_checkpoint(checkpoint_path, model, optimizer, learning_rate, iteration)
+                break
+            else:
+                # Continue to next session
+                continue
+
+        # Begin new session training
+        print("==================================================")
+        print("  Session: {}".format(i))
+        print("    - Iterations: {:,}".format(max_iters))
+        print("    - Batch Size: {}".format(batch_size))
+        print("    - Learning Rate: {:.0e}".format(learning_rate))
+        print("    - Outputs/Step (r): {}".format(r))
+        print("==================================================")
+
+        # Model parameters
+        model.r = r
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = learning_rate
+
+        # Dataloader
+        collate_fn = TextMelCollate(r)
+        train_loader = DataLoader(trainset, num_workers=1,
+                                  shuffle=True, batch_size=batch_size,
+                                  pin_memory=False, drop_last=True,
+                                  collate_fn=collate_fn)
+
+        # Iterations
+        iters_per_epoch = len(trainset) // batch_size
+        max_epochs = max_iters // iters_per_epoch
+        for epoch in range(epoch, max_epochs):
+          print("Epoch: {}".format(epoch))
+          for i, batch in enumerate(train_loader):
             start = time.perf_counter()
             iteration += 1
-
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = learning_rate
 
             # prepare data
             inputs, targets = model.parse_data_batch(batch)
@@ -214,13 +239,16 @@ def train(output_dir, log_dir, checkpoint_path, warm_start, hparams):
 
             # Validation
             if iteration % hparams.iters_per_validation == 0:
-                validate(model, criterion, iteration, device, valset, hparams.batch_size, collate_fn, logger)
+                validate(model, criterion, iteration, device, valset, batch_size, collate_fn, logger)
 
             # Save checkpoint
             if iteration % hparams.iters_per_checkpoint == 0:
                 checkpoint_path = os.path.join(output_dir, "checkpoint_{}".format(iteration))
-                save_checkpoint(checkpoint_path, model, optimizer, learning_rate, iteration)
+                save_checkpoint(checkpoint_path, model, optimizer, learning_rate, iteration, epoch)
 
+            # Break out of loop to update training schedule
+            if iteration >= max_iters:
+                break
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

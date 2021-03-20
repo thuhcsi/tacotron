@@ -6,9 +6,6 @@ class Hparams:
         ################################
         # Experiment Parameters        #
         ################################
-        self.epochs = 500
-        self.iters_per_checkpoint = 1000
-        self.iters_per_validation = 1000
         self.seed = 1234
         self.dynamic_loss_scaling = True
         self.fp16_run = False
@@ -34,19 +31,23 @@ class Hparams:
         self.num_symbols = len(symbols(self.symbols_lang))
         self.symbols_embed_dim = 512
         self.mel_dim = 80
-        self.r = 3
         self.max_decoder_steps = 1000
         self.stop_threshold = 0.5
 
         ################################
-        # Optimization Hyperparameters #
+        # Model training Parameters    #
         ################################
-        self.use_saved_learning_rate = False
-        self.learning_rate = 1e-3
-        self.weight_decay = 1e-6
-        self.grad_clip_thresh = 1.0
-        self.batch_size = 32
-        self.mask_padding = True  # set model's padded outputs to padded values
+        self.schedule = [(10, 1e-3,  10_000,  32),   # Progressive training schedule
+                         (3,  1e-3,  20_000,  32),   # (r, lr, iters, batch_size)
+                         (3,  5e-4,  40_000,  32),   #
+                         (2,  2e-4,  80_000,  32),   # r = reduction factor (# of mel frames
+                         (2,  1e-4, 120_000,  32),   #     synthesized for each decoder iteration)
+                         (1,  3e-5, 160_000,  32),   # lr = learning rate
+                         (1,  1e-5, 200_000,  32)]   # iters = maximum iteration steps
+
+        self.grad_clip_thresh = 1.0                  # Clip the gradient norm to prevent explosion
+        self.iters_per_checkpoint = 1000             # Number of iterations between model checkpoint saving
+        self.iters_per_validation = 1000             # Number of iterations between model validation
 
     def __str__(self):
         return "\n".join(
