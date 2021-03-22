@@ -36,25 +36,32 @@ class BahdanauAttention(nn.Module):
             query: (batch, 1, dim) or (batch, dim)
             processed_memory: (batch, max_time, dim)
             mask: (batch, max_time)
+
+        Returns:
+            alignment: [batch, max_time]
         """
         if query.dim() == 2:
             # insert time-axis for broadcasting
             query = query.unsqueeze(1)
 
         # Alignment energies
-        alignment = self.get_alignment_energies(query, processed_memory)
+        alignment = self.get_energies(query, processed_memory)
 
         if mask is not None:
             mask = mask.view(query.size(0), -1)
             alignment.data.masked_fill_(mask, self.score_mask_value)
 
-        # Normalize attention weight
-        alignment = nn.Softmax(dim=1)(alignment)
+        # Alignment probabilities (attention weights)
+        alignment = self.get_probabilities(alignment)
 
         # (batch, max_time)
         return alignment
 
-    def get_alignment_energies(self, query, processed_memory):
+    def init_attention(self, processed_memory):
+        # Nothing to do in the base module
+        return
+
+    def get_energies(self, query, processed_memory):
         """
         Compute the alignment energies
         """
@@ -66,6 +73,12 @@ class BahdanauAttention(nn.Module):
 
         # (batch, max_time)
         return alignment.squeeze(-1)
+
+    def get_probabilities(self, energies):
+        """
+        Compute the alignment probabilites (attention weights) from energies
+        """
+        return nn.Softmax(dim=1)(energies)
 
 
 class LocationSensitiveAttention(BahdanauAttention):
@@ -88,10 +101,11 @@ class LocationSensitiveAttention(BahdanauAttention):
         self.cumulative = None
 
     def init_attention(self, processed_memory):
+        # Initialize cumulative attention
         b, t, c = processed_memory.size()
         self.cumulative = processed_memory.data.new(b, t).zero_()
 
-    def get_alignment_energies(self, query, processed_memory):
+    def get_energies(self, query, processed_memory):
         # Query (batch, 1, dim)
         processed_query = self.query_layer(query)
 
@@ -104,12 +118,12 @@ class LocationSensitiveAttention(BahdanauAttention):
 
         # (batch, max_time)
         return alignment.squeeze(-1)
-        
-    def forward(self, query, processed_memory, mask=None):
-        # Get normalized attention weight
-        alignment = super(LocationSensitiveAttention, self).forward(query, processed_memory, mask)
 
-        # Cumulative attentions
+    def get_probabilities(self, energies):
+        # Current attention
+        alignment = nn.Softmax(dim=1)(energies)
+
+        # Cumulative attention
         self.cumulative = self.cumulative + alignment
 
         # (batch, max_time)
