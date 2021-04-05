@@ -36,7 +36,6 @@ def create_model(hparams):
                          max_decoder_steps=hparams.max_decoder_steps,
                          stop_threshold=hparams.stop_threshold,
                          r=hparams.r,
-                         use_memory_mask=True,
                          model_cfg=model_cfg
                          )
         # Loss criterion
@@ -49,7 +48,6 @@ def create_model(hparams):
                           max_decoder_steps=hparams.max_decoder_steps,
                           stop_threshold=hparams.stop_threshold,
                           r=hparams.r,
-                          use_memory_mask=True,
                           model_cfg=model_cfg
                           )
         # Loss criterion
