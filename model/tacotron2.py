@@ -220,6 +220,7 @@ class Decoder(nn.Module):
 
 class Tacotron2(nn.Module):
     def __init__(self, model_cfg, n_vocab, embed_dim=512, mel_dim=80,
+                 n_speaker=1, speaker_embed_dim=64,
                  max_decoder_steps=1000, stop_threshold=0.5, r=3):
         super(Tacotron2, self).__init__()
 
@@ -231,12 +232,16 @@ class Tacotron2(nn.Module):
         val = sqrt(3.0) * std  # uniform bounds for std
         self.embedding.weight.data.uniform_(-val, val)
 
+        # Speaker Embedding
+        self.speaker_embedding = nn.Embedding(n_speaker, speaker_embed_dim)
+
         # Encoder
         encoder_cfg = model_cfg["encoder"]
         encoder_out_dim = encoder_cfg["blstm_units"]
         self.encoder = Encoder(embed_dim, **encoder_cfg)
 
         # Decoder
+        encoder_out_dim = encoder_out_dim + speaker_embed_dim
         decoder_cfg = model_cfg["decoder"]
         self.decoder = Decoder(mel_dim, r, encoder_out_dim, **decoder_cfg,
             max_decoder_steps=max_decoder_steps, stop_threshold=stop_threshold)
@@ -251,16 +256,17 @@ class Tacotron2(nn.Module):
         # use same device as parameters
         device = next(self.parameters()).device
 
-        text, text_length, mel, stop, mel_length = batch
+        text, text_length, mel, stop, mel_length, speaker_id = batch
         text = text.to(device).long()
         text_length = text_length.to(device).long()
         mel = mel.to(device).float()
         stop = stop.to(device).float()
+        speaker_id = speaker_id.to(device).long()
 
-        return (text, text_length, mel), (mel, stop)
+        return (text, text_length, mel, speaker_id), (mel, stop)
 
     def forward(self, inputs):
-        inputs, input_lengths, mels = inputs
+        inputs, input_lengths, mels, speaker_ids = inputs
 
         B = inputs.size(0)
 
@@ -269,6 +275,13 @@ class Tacotron2(nn.Module):
 
         # (B, T, embed_dim)
         encoder_outputs = self.encoder(inputs)
+
+        # (B) -> (B, T, speaker_embed_dim)
+        speaker_embeddings = self.speaker_embedding(speaker_ids)[:, None]
+        speaker_embeddings = speaker_embeddings.repeat(1, encoder_outputs.size(1), 1)
+
+        # (B, T, encoder_out_dim + speaker_embed_dim)
+        encoder_outputs = torch.cat((encoder_outputs, speaker_embeddings), dim=2)
 
         # (B, T, mel_dim)
         mel_outputs, stop_tokens, alignments = self.decoder(
@@ -280,9 +293,9 @@ class Tacotron2(nn.Module):
 
         return mel_outputs, mel_post, stop_tokens, alignments
 
-    def inference(self, inputs):
+    def inference(self, inputs, speakers):
         # Only text inputs
-        inputs = inputs, None, None
+        inputs = inputs, None, None, speakers
         return self.forward(inputs)
 
 

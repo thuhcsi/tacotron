@@ -29,13 +29,16 @@ class TextMelDataset(torch.utils.data.Dataset):
                 path  = parts[0]
                 # text
                 text  = parts[1]
-                f_list.append([text, path])
+                # speaker id
+                spkr = int(parts[2])
+                f_list.append([text, path, spkr])
         return f_list
 
-    def get_mel_text_pair(self, text, file_path):
-        text = self.get_text(text)
+    def get_item(self, text, file_path, speaker):
+        txt = self.get_text(text)
         mel = self.get_mel(file_path)
-        return (text, mel)
+        spk = torch.IntTensor([speaker])
+        return (txt, mel, spk)
 
     def get_mel(self, file_path):
         #stored melspec: np.ndarray [shape=(T_out, num_mels)]
@@ -50,7 +53,7 @@ class TextMelDataset(torch.utils.data.Dataset):
         return text_norm
 
     def __getitem__(self, index):
-        return self.get_mel_text_pair(*self.f_list[index])
+        return self.get_item(*self.f_list[index])
 
     def __len__(self):
         return len(self.f_list)
@@ -66,7 +69,7 @@ class TextMelCollate():
         """Collate's training batch from normalized text and mel-spectrogram
         PARAMS
         ------
-        batch: [text_normalized, mel_normalized]
+        batch: [text_normalized, mel_normalized, speaker]
         """
         # Right zero-pad all one-hot text sequences to max input length
         input_lengths, ids_sorted_decreasing = torch.sort(
@@ -74,11 +77,13 @@ class TextMelCollate():
             dim=0, descending=True)
         max_input_len = input_lengths[0]
 
+        speakers = torch.LongTensor(len(batch))
         text_padded = torch.LongTensor(len(batch), max_input_len)
         text_padded.zero_()
         for i in range(len(ids_sorted_decreasing)):
             text = batch[ids_sorted_decreasing[i]][0]
             text_padded[i, :text.size(0)] = text
+            speakers[i] = batch[ids_sorted_decreasing[i]][2]
 
         # Right zero-pad mel-spec
         num_mels = batch[0][1].size(1)
@@ -99,4 +104,4 @@ class TextMelCollate():
             gate_padded[i, mel.size(0)-1:] = 1
             output_lengths[i] = mel.size(0)
 
-        return text_padded, input_lengths, mel_padded, gate_padded, output_lengths
+        return text_padded, input_lengths, mel_padded, gate_padded, output_lengths, speakers

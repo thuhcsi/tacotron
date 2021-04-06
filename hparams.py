@@ -31,8 +31,15 @@ class Hparams:
         self.tacotron_version = "2"  # 1: Tacotron; 2: Tacotron-2
         self.tacotron_config = "tacotron2.json"
 
+        # Text embedding
         self.num_symbols = len(symbols(self.symbols_lang))
         self.symbols_embed_dim = 512
+
+        # Speaker embedding
+        self.num_speakers = 1
+        self.speaker_embed_dim = 64
+
+        # Decoder parameters
         self.mel_dim = 80
         self.r = 3
         self.max_decoder_steps = 1000
