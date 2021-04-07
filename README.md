@@ -10,6 +10,18 @@ PyTorch implementation of [Natural TTS synthesis by conditioning Wavenet on MEL 
     - For Tacotron: [tacotron1.json](tacotron1.json)
     - For Tacotron2: [tacotron2.json](tacotron2.json)
 
+## Branches
+
+New configurations can be created by merging features from the following different branches.
+
+- **master**: Basic Tacotron and Tacotron2 implementation
+
+- **dynamic_r**: Dynamic reduction factor (r) changing along with training schedule
+
+- **gst**: Global style token (GST) support
+
+- **multispeaker**: Multi-speaker support with speaker embeddings
+
 ## Setup
 1. Prepare `DATASET` directory
     - Prepare `train.csv.txt` and `val.csv.txt` files
