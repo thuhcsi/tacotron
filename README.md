@@ -3,12 +3,17 @@
 PyTorch implementation of [Tacotron: Towards End-to-End Speech Synthesis](https://arxiv.org/abs/1703.10135), and  
 PyTorch implementation of [Natural TTS synthesis by conditioning Wavenet on MEL spectogram predictions](https://arxiv.org/abs/1712.05884).
 
+PyTorch implementation of [Style Tokens: Unsupervised Style Modeling, Control and Transfer in End-to-End Speech Synthesis](https://arxiv.org/abs/1803.09017)
+
+![model](misc/model.png)
+
 ## Features
 
 - Easy switch between [Tacotron](https://arxiv.org/abs/1703.10135) and [Tacotron2](https://arxiv.org/abs/1712.05884)
 - Detailed model structure configuration with json
     - For Tacotron: [tacotron1.json](tacotron1.json)
     - For Tacotron2: [tacotron2.json](tacotron2.json)
+- Global style token (GST) support
 
 ## Setup
 1. Prepare `DATASET` directory
@@ -50,6 +55,7 @@ and the Mel decoder were trained on the same mel-spectrogram representation.
 ## Acknowledgements
 This implementation uses code from the following repos as described in our code.
 
+- [GST-Tacotron by KinglittleQ](https://github.com/KinglittleQ/GST-Tacotron)
 - [Tacotron2 by NVIDIA](https://github.com/NVIDIA/tacotron2)
 - [Tacotron by blue-fish in Real-Time-Voice-Cloning](https://github.com/CorentinJ/Real-Time-Voice-Cloning/tree/b5ba6d0371882dbab595c48deb2ff17896547de7/synthesizer)
 - [Tacotron by r9y9](https://github.com/r9y9/tacotron_pytorch)
