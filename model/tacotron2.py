@@ -263,12 +263,13 @@ class Tacotron2(nn.Module):
         text = text.to(device).long()
         text_length = text_length.to(device).long()
         mel = mel.to(device).float()
+        mel_length = mel_length.to(device).long()
         stop = stop.to(device).float()
 
-        return (text, text_length, mel), (mel, stop)
+        return (text, text_length, mel, mel_length), (mel, stop)
 
     def forward(self, inputs):
-        inputs, input_lengths, mels = inputs
+        inputs, input_lengths, mels, mel_lengths = inputs
 
         B = inputs.size(0)
 
@@ -279,7 +280,7 @@ class Tacotron2(nn.Module):
         encoder_outputs = self.encoder(inputs)
 
         # (B, T, token_embed_dim)
-        style_embeddings = self.gst(mels, None)
+        style_embeddings = self.gst(mels, mel_lengths)
         style_embeddings = style_embeddings.repeat(1, encoder_outputs.size(1), 1)
 
         # (B, T, encoder_out_dim + token_embed_dim)
