@@ -41,7 +41,7 @@ def create_model(hparams):
                          model_cfg=model_cfg
                          )
         # Loss criterion
-        criterion = TacotronLoss()
+        criterion = TacotronLoss(hparams.speaker_loss_weight)
     elif hparams.tacotron_version == "2":
         # Tacotron2 model
         model = Tacotron2(n_vocab=hparams.num_symbols,
@@ -55,7 +55,7 @@ def create_model(hparams):
                           model_cfg=model_cfg
                           )
         # Loss criterion
-        criterion = Tacotron2Loss()
+        criterion = Tacotron2Loss(hparams.speaker_loss_weight)
     else:
         raise ValueError("Unsupported Tacotron version: {} ".format(hparams.tacotron_version))
     #

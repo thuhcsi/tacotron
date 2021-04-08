@@ -7,6 +7,10 @@
         "blstm_units": 512
     },
 
+    "spk_classifier":{
+        "hidden_dims": [256]
+    },
+
     "decoder":{
         "prenet_dims": [256, 256],
         "prenet_dropout": 0.5,

@@ -18,11 +18,11 @@ class TacotronLogger(SummaryWriter):
     def log_validation(self, loss, model, targets, predicts, iteration):
         self.add_scalar("validation.loss", loss, iteration)
 
-        _, spec_predicts, stop_predicts, alignments = predicts
-        if len(targets) == 3:
-            _, spec_targets, stop_targets  = targets
+        _, spec_predicts, stop_predicts, alignments, _ = predicts
+        if len(targets) == 4:
+            _, spec_targets, stop_targets, _  = targets
         else:
-            spec_targets, stop_targets  = targets
+            spec_targets, stop_targets, _ = targets
 
         # plot distribution of parameters
         for tag, value in model.named_parameters():

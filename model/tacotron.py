@@ -6,7 +6,7 @@ from torch import nn
 
 from .attention import BahdanauAttention, AttentionWrapper
 from .attention import get_mask_from_lengths
-from .modules import Prenet, CBHG
+from .modules import Prenet, CBHG, AdversarialClassifier
 
 
 class Encoder(nn.Module):
@@ -208,6 +208,10 @@ class Tacotron(nn.Module):
         encoder_out_dim = encoder_cfg["rnn_units"] * 2
         self.encoder = Encoder(embed_dim, **encoder_cfg)
 
+        # Adversarial speaker classifier
+        spk_classifier_cfg = model_cfg["spk_classifier"]
+        self.speaker_classifier = AdversarialClassifier(encoder_out_dim, n_speaker, **spk_classifier_cfg)
+
         # Decoder
         encoder_out_dim = encoder_out_dim + speaker_embed_dim
         decoder_cfg = model_cfg["decoder"]
@@ -234,7 +238,7 @@ class Tacotron(nn.Module):
         stop = stop.to(device).float()
         speaker_id = speaker_id.to(device).long()
 
-        return (text, mel, text_length, speaker_id), (mel, mel, stop)
+        return (text, mel, text_length, speaker_id), (mel, mel, stop, speaker_id)
 
     def forward(self, inputs):
         inputs, targets, input_lengths, speaker_ids = inputs
@@ -246,6 +250,9 @@ class Tacotron(nn.Module):
 
         # (B, T, embed_dim)
         encoder_outputs = self.encoder(inputs)
+
+        # (B, T, n_speaker)
+        speaker_outputs = self.speaker_classifier(encoder_outputs)
 
         # (B) -> (B, T, speaker_embed_dim)
         speaker_embeddings = self.speaker_embedding(speaker_ids)[:, None]
@@ -262,7 +269,7 @@ class Tacotron(nn.Module):
         linear_outputs = self.postnet(mel_outputs)
         linear_outputs = self.last_linear(linear_outputs)
 
-        return mel_outputs, linear_outputs, stop_tokens, alignments
+        return mel_outputs, linear_outputs, stop_tokens, alignments, speaker_outputs
 
     def inference(self, inputs, speakers):
         # Only text inputs
@@ -271,19 +278,32 @@ class Tacotron(nn.Module):
 
 
 class TacotronLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, speaker_loss_weight):
         super(TacotronLoss, self).__init__()
+        self.speaker_loss_weight = speaker_loss_weight
 
     def forward(self, predicts, targets):
-        mel_target, linear_target, stop_target = targets
+        mel_target, linear_target, stop_target, speaker_target = targets
         mel_target.requires_grad = False
         linear_target.requires_grad = False
         stop_target.requires_grad = False
+        speaker_target.requires_grad = False
 
-        mel_predict, linear_predict, stop_predict, _ = predicts
+        mel_predict, linear_predict, stop_predict, _, speaker_predict = predicts
 
         mel_loss = nn.MSELoss()(mel_predict, mel_target)
         linear_loss = nn.MSELoss()(linear_predict, linear_target)
         stop_loss = nn.BCELoss()(stop_predict, stop_target)
 
-        return mel_loss + linear_loss + stop_loss
+        # Compute speaker adversarial loss
+        #
+        # The speaker adversarial loss should be computed against each element of the encoder output.
+        #
+        # In Google's paper (https://arxiv.org/abs/1907.04448), it is mentioned that:
+        # 'We impose this adversarial loss separately on EACH ELEMENT of the encoded text sequence,...'
+        #
+        speaker_target = speaker_target.unsqueeze(1).repeat(1, speaker_predict.size(1)) # (B) -> (B, T)
+        speaker_predict = speaker_predict.transpose(1, 2) # (B, T, n_speaker) -> (B, n_speaker, T)
+        speaker_loss = nn.CrossEntropyLoss()(speaker_predict, speaker_target)
+
+        return mel_loss + linear_loss + stop_loss + speaker_loss * self.speaker_loss_weight

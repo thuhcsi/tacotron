@@ -38,6 +38,7 @@ class Hparams:
         # Speaker embedding
         self.num_speakers = 1
         self.speaker_embed_dim = 64
+        self.speaker_loss_weight = 0.02
 
         # Decoder parameters
         self.mel_dim = 80
