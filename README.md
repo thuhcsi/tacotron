@@ -3,6 +3,12 @@
 PyTorch implementation of [Tacotron: Towards End-to-End Speech Synthesis](https://arxiv.org/abs/1703.10135), and  
 PyTorch implementation of [Natural TTS synthesis by conditioning Wavenet on MEL spectogram predictions](https://arxiv.org/abs/1712.05884).
 
+## Model architecture
+
+<p align="center">
+  <img src="misc/speaker-adv.png" width="70%"/>
+</p>
+
 ## Features
 
 - Easy switch between [Tacotron](https://arxiv.org/abs/1703.10135) and [Tacotron2](https://arxiv.org/abs/1712.05884)
