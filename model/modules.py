@@ -5,6 +5,8 @@
 import torch
 from torch import nn
 
+from .grl import GradientReversal
+
 
 class Prenet(nn.Module):
     """
@@ -207,3 +209,37 @@ class CBHG(nn.Module):
         """Calls `flatten_parameters` on all the rnns. Used
         to improve efficiency and avoid PyTorch yelling at us."""
         [m.flatten_parameters() for m in self._to_flatten]
+
+
+class AdversarialClassifier(nn.Module):
+    """
+    AdversarialClassifier
+        - 1 gradident reversal layer
+        - n hidden linear layers with ReLU activation
+        - 1 output linear layer with Softmax activation
+    """
+    def __init__(self, in_dim, out_dim, hidden_dims=[256], rev_scale=1):
+        """
+        Args:
+             in_dim: input dimension
+            out_dim: number of units of output layer (number of classes)
+        hidden_dims: number of units of hidden layers
+          rev_scale: gradient reversal scale
+        """
+        super(AdversarialClassifier, self).__init__()
+
+        self.gradient_rev = GradientReversal(rev_scale)
+
+        in_sizes = [in_dim] + hidden_dims[:]
+        out_sizes = hidden_dims[:] + [out_dim]
+        self.layers = nn.ModuleList(
+            [nn.Linear(in_size, out_size, bias=True)
+             for (in_size, out_size) in zip(in_sizes, out_sizes)])
+
+        self.activations = [nn.ReLU()] * len(hidden_dims) + [nn.Softmax(dim=-1)]
+
+    def forward(self, x):
+        x = self.gradient_rev(x)
+        for (linear, activate) in zip(self.layers, self.activations):
+            x = activate(linear(x))
+        return x
