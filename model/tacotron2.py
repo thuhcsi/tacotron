@@ -296,10 +296,34 @@ class Tacotron2(nn.Module):
 
         return mel_outputs, mel_post, stop_tokens, alignments
 
-    def inference(self, inputs):
-        # Only text inputs
-        inputs = inputs, None, None
-        return self.forward(inputs)
+    def inference(self, inputs, scores=None, refs=None):
+        """
+        Args:
+            inputs: [B, T]          text inputs
+            scores: [B, num_tokens] GST token weights
+            refs:   [B, T, mel_dim] mel of the reference audio
+        """
+
+        inputs = self.embedding(inputs)
+        encoder_outputs = self.encoder(inputs)
+
+        if scores is not None:
+            # style embedding from GST token weights
+            scores = scores.unsqueeze(1)  # (B, 1, num_tokens)
+            style_embeddings = self.gst.stl.from_token(scores)   # (B, 1, token_embed_dim)
+        else:
+            # style embedding from reference audio
+            style_embeddings = self.gst(refs, None)  # (B, 1, token_embed_dim)
+
+        style_embeddings = style_embeddings.repeat(1, encoder_outputs.size(1), 1)
+        encoder_outputs = torch.cat((encoder_outputs, style_embeddings), dim=2)
+
+        mel_outputs, stop_tokens, alignments = self.decoder(encoder_outputs)
+
+        mel_post = self.postnet(mel_outputs)
+        mel_post = mel_outputs + mel_post
+
+        return mel_outputs, mel_post, stop_tokens, alignments
 
 
 class Tacotron2Loss(nn.Module):

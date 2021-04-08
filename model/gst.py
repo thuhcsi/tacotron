@@ -148,6 +148,23 @@ class StyleTokenLayer(nn.Module):
 
         return style_embed
 
+    def from_token(self, token_scores):
+        """
+        Get style embedding by specifying token_scores
+
+        input:
+            token_scores --- [B, 1, num_tokens]
+        output:
+            style_embed --- [B, 1, token_embed_dim]
+        """
+
+        B = token_scores.size(0)
+        tokens = torch.tanh(self.embeddings).unsqueeze(0).expand(B, -1, -1)  # [B, num_tokens, token_embed_dim // num_heads]
+        tokens = self.attention.W_value(tokens)  # [B, num_tokens, token_embed_dim]
+        style_embed = torch.matmul(token_scores, tokens)  # [B, 1, token_embed_dim]
+
+        return style_embed
+
 
 class MultiHeadAttention(nn.Module):
     """
