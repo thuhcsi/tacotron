@@ -8,6 +8,7 @@ from torch import nn
 from .attention import LocationSensitiveAttention, AttentionWrapper
 from .attention import get_mask_from_lengths
 from .modules import Prenet, BatchNormConv1dStack
+from .gst import GST
 
 
 class Postnet(nn.Module):
@@ -220,6 +221,7 @@ class Decoder(nn.Module):
 
 class Tacotron2(nn.Module):
     def __init__(self, model_cfg, n_vocab, embed_dim=512, mel_dim=80,
+                 num_tokens=10, token_embed_dim=256, num_heads=8,
                  max_decoder_steps=1000, stop_threshold=0.5, r=3):
         super(Tacotron2, self).__init__()
 
@@ -236,7 +238,13 @@ class Tacotron2(nn.Module):
         encoder_out_dim = encoder_cfg["blstm_units"]
         self.encoder = Encoder(embed_dim, **encoder_cfg)
 
+        # GST
+        gst_cfg = model_cfg["gst"]
+        self.gst = GST(mel_dim, **gst_cfg, num_tokens=num_tokens,
+                       token_embed_dim=token_embed_dim, num_heads=num_heads)
+
         # Decoder
+        encoder_out_dim = encoder_out_dim + token_embed_dim
         decoder_cfg = model_cfg["decoder"]
         self.decoder = Decoder(mel_dim, r, encoder_out_dim, **decoder_cfg,
             max_decoder_steps=max_decoder_steps, stop_threshold=stop_threshold)
@@ -269,6 +277,13 @@ class Tacotron2(nn.Module):
 
         # (B, T, embed_dim)
         encoder_outputs = self.encoder(inputs)
+
+        # (B, T, token_embed_dim)
+        style_embeddings = self.gst(mels, None)
+        style_embeddings = style_embeddings.repeat(1, encoder_outputs.size(1), 1)
+
+        # (B, T, encoder_out_dim + token_embed_dim)
+        encoder_outputs = torch.cat((encoder_outputs, style_embeddings), dim=2)
 
         # (B, T, mel_dim)
         mel_outputs, stop_tokens, alignments = self.decoder(

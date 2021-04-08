@@ -7,6 +7,14 @@
         "blstm_units": 512
     },
 
+    "gst":{
+        "conv_channels": [32, 32, 64, 64, 128, 128],
+        "kernel_size": 3,
+        "stride": 2,
+        "padding": 1,
+        "gru_units": 128
+    },
+
     "decoder":{
         "prenet_dims": [256, 256],
         "prenet_dropout": 0.5,
