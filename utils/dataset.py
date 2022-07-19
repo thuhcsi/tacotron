@@ -41,7 +41,7 @@ class TextMelDataset(torch.utils.data.Dataset):
         #stored melspec: np.ndarray [shape=(T_out, num_mels)]
         melspec = torch.from_numpy(np.load(file_path))
         assert melspec.size(1) == self.mel_dim, (
-            'Mel dimension mismatch: given {}, expected {}'.format(melspec.size(0), self.mel_dim))
+            'Mel dimension mismatch: given {}, expected {}'.format(melspec.size(1), self.mel_dim))
 
         return melspec
 
